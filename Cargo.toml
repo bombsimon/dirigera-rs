@@ -1,0 +1,52 @@
+[package]
+name = "dirigera"
+description = "Manage your IKEA Trådfri devices with Rust"
+version = "0.1.0"
+edition = "2021"
+authors = ["Simon Sawert<simon@sawert.se>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/bombsimon/dirigera-rs"
+repository = "https://github.com/bombsimon/dirigera-rs"
+
+[dependencies]
+anyhow = "1.0"
+chrono = "0.4"
+http = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Dependencies needed to run the binary to generate a token. Can be skipped if
+# already obtained token or after token is obtained.
+tokio = { version = "1.33", features = ["full"], optional = true}
+toml = { version = "0.5", optional = true }
+pkce = { version = "0.1.1", optional = true }
+url = { version = "2.4", optional = true }
+reqwest = { version = "0.11.22", features = ["json"], optional = true }
+
+[dev-dependencies]
+bytes = "1"
+rand = "0.8.5"
+reqwest = { version = "0.11", features = ["json"] }
+
+[features]
+default = []
+config = ["dep:toml"]
+example = ["config", "dep:tokio"]
+binary = [
+  "config",
+  "dep:tokio",
+  "dep:pkce",
+  "dep:url",
+  "dep:reqwest",
+]
+
+
+[[bin]]
+name = "generate-token"
+path = "src/bin/generate_token.rs"
+required-features = ["binary"]
+
+[[example]]
+name = "dirigera"
+required-features = ["example"]
