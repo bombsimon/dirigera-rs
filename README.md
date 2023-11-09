@@ -42,3 +42,13 @@ token = "abc123..."
 ## Usage
 
 See [examples](examples) for examples on how to use this crate.
+
+### Manual testing
+
+Just use the token you got and your favourite HTTP client.
+
+```sh
+› http --verify=no \
+  "https://[ip]:8443/v1/devices" \
+  "Authorization: Bearer $TOKEN"
+```

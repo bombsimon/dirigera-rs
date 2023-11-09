@@ -11,6 +11,7 @@ pub enum Scene {
 #[serde(rename_all = "camelCase")]
 pub struct SceneData {
     pub id: String,
+    pub info: Info,
     #[serde(alias = "type")]
     pub scene_type: Option<String>,
     pub actions: Vec<Action>,
@@ -127,4 +128,12 @@ pub struct SceneAttributes {
     pub is_on: bool,
     pub light_level: Option<u8>,
     pub color_temperature: Option<u16>,
+}
+
+impl Scene {
+    pub fn inner(&self) -> &SceneData {
+        match self {
+            Scene::UserScene(inner) => inner,
+        }
+    }
 }

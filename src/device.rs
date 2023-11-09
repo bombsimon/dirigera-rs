@@ -1,5 +1,5 @@
 use crate::deserialize_datetime;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase", tag = "type")]
@@ -79,7 +79,7 @@ impl std::fmt::Display for DeviceType {
     }
 }
 
-#[derive(Debug, Deserialize, PartialEq, PartialOrd)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub enum Startup {
     StartOn,
@@ -154,7 +154,7 @@ pub struct Attributes {
 }
 
 impl Device {
-    pub fn into_inner(&self) -> &DeviceData {
+    pub fn inner(&self) -> &DeviceData {
         match self {
             Device::Blind(inner) => inner,
             Device::Controller(inner) => inner,
@@ -162,6 +162,17 @@ impl Device {
             Device::Light(inner) => inner,
             Device::Outlet(inner) => inner,
             Device::Sensor(inner) => inner,
+        }
+    }
+
+    pub fn inner_mut(&mut self) -> &mut DeviceData {
+        match self {
+            Device::Blind(ref mut inner) => inner,
+            Device::Controller(ref mut inner) => inner,
+            Device::Gateway(ref mut inner) => inner,
+            Device::Light(ref mut inner) => inner,
+            Device::Outlet(ref mut inner) => inner,
+            Device::Sensor(ref mut inner) => inner,
         }
     }
 }

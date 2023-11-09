@@ -1,24 +1,26 @@
+use hyper::service::Service;
 use serde::Deserialize;
-use std::collections::HashMap;
 
+use std::collections::HashMap;
 #[cfg(feature = "config")]
 use std::io::Read;
 
+#[derive(Debug)]
+pub struct Hub {
+    client: hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
+    ip_address: std::net::Ipv4Addr,
+    token: String,
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "kebab-case")]
-pub struct Hub {
+pub struct Config {
     ip_address: std::net::Ipv4Addr,
     token: String,
 }
 
 const DIRIGERA_PORT: u16 = 8443;
 const DIRIGERA_API_VERSION: &str = "v1";
-
-/// The requests to the Dirigera hub is a list of maps with attributes to set. F.ex. to turn on a
-/// light bulb you would pass
-///
-///     [{"attributes": {"isOn": true}}]
-type DirigeraBody<'a, T> = http::Request<Vec<HashMap<&'a str, HashMap<&'a str, T>>>>;
 
 #[cfg(feature = "config")]
 impl Default for Hub {
@@ -29,119 +31,140 @@ impl Default for Hub {
             .read_to_string(&mut toml_content)
             .expect("Failed to read config.toml");
 
-        toml::from_str(&toml_content).expect("Failed to parse TOML")
+        let config: Config = toml::from_str(&toml_content).expect("Failed to parse TOML");
+
+        let tls = crate::danger::tls_no_verify();
+        let https = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_tls_config(tls)
+            .https_only()
+            .enable_http1()
+            .build();
+
+        let client = hyper::Client::builder().build::<_, hyper::Body>(https);
+
+        Self::new(client, config.ip_address, config.token)
     }
 }
 
 impl Hub {
-    pub fn new(ip_address: std::net::Ipv4Addr, token: String) -> Self {
-        Hub { ip_address, token }
+    pub fn new(
+        client: hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
+        ip_address: std::net::Ipv4Addr,
+        token: String,
+    ) -> Self {
+        Hub {
+            client,
+            ip_address,
+            token,
+        }
     }
 
-    fn build_uri<T>(
+    fn create_request(
         &self,
         method: http::Method,
         path: &str,
-        body: T,
-    ) -> anyhow::Result<http::Request<T>>
-    where
-        T: serde::Serialize,
-    {
-        let url = format!(
+        body: Option<hyper::Body>,
+    ) -> anyhow::Result<http::Request<hyper::Body>> {
+        let uri: hyper::Uri = format!(
             "https://{}:{}/{}{}",
-            self.ip_address, DIRIGERA_PORT, DIRIGERA_API_VERSION, path
-        );
-
-        http::Request::builder()
-            .uri(url)
-            .method(method)
-            .header("User-Agent", "dirigera-rs/0.1.0")
-            .header("Authorization", format!("Bearer {}", self.token))
-            .body(body)
-            .map_err(|err| anyhow::anyhow!(err))
-    }
-
-    pub fn devices_request(&self) -> anyhow::Result<http::Request<()>> {
-        self.build_uri(http::Method::GET, "/devices", ())
-    }
-
-    pub fn devices_parse_response<T>(
-        &self,
-        response: http::Response<T>,
-    ) -> anyhow::Result<Vec<crate::Device>>
-    where
-        T: AsRef<[u8]>,
-    {
-        serde_json::from_slice(response.body().as_ref()).map_err(|err| anyhow::anyhow!(err))
-    }
-
-    pub fn device_request(&self, id: &str) -> anyhow::Result<http::Request<()>> {
-        self.build_uri(http::Method::GET, format!("/devices/{}", id).as_str(), ())
-    }
-
-    pub fn device_parse_response<T>(
-        &self,
-        response: http::Response<T>,
-    ) -> anyhow::Result<crate::Device>
-    where
-        T: AsRef<[u8]>,
-    {
-        serde_json::from_slice(response.body().as_ref()).map_err(|err| anyhow::anyhow!(err))
-    }
-
-    pub fn scenes_request(&self) -> anyhow::Result<http::Request<()>> {
-        self.build_uri(http::Method::GET, "/scenes", ())
-    }
-
-    pub fn scenes_parse_response<T>(
-        &self,
-        response: http::Response<T>,
-    ) -> anyhow::Result<Vec<crate::Scene>>
-    where
-        T: AsRef<[u8]>,
-    {
-        serde_json::from_slice(response.body().as_ref()).map_err(|err| anyhow::anyhow!(err))
-    }
-
-    pub fn device_reload_request(
-        &self,
-        device: &crate::device::Device,
-    ) -> anyhow::Result<http::Request<()>> {
-        self.build_uri(
-            http::Method::GET,
-            format!("/devices/{}", device.into_inner().id).as_str(),
-            (),
+            self.ip_address, DIRIGERA_PORT, DIRIGERA_API_VERSION, path,
         )
+        .try_into()?;
+
+        let request = http::Request::builder()
+            .method(method)
+            .uri(&uri)
+            .header(http::header::CONTENT_TYPE, "application/json")
+            .header("User-Agent", "dirigera-rs/0.1.0")
+            .header("Authorization", format!("Bearer {}", self.token));
+
+        let req = match body {
+            Some(body) => request.body(body),
+            None => request.body(hyper::Body::empty()),
+        };
+
+        req.map_err(|err| anyhow::anyhow!(err))
     }
 
-    pub fn device_reload_parse_response<T>(
-        &self,
-        device: &mut crate::device::Device,
-        response: http::Response<T>,
-    ) -> anyhow::Result<()>
+    async fn deserialize_response<T>(response: http::Response<hyper::Body>) -> anyhow::Result<T>
     where
-        T: AsRef<[u8]>,
+        T: serde::de::DeserializeOwned,
     {
-        *device =
-            serde_json::from_slice(response.body().as_ref()).map_err(|err| anyhow::anyhow!(err))?;
+        let (_, body) = response.into_parts();
+        let body = hyper::body::to_bytes(body).await?;
+
+        serde_json::from_slice(body.as_ref()).map_err(|err| anyhow::anyhow!(err))
+    }
+
+    pub async fn devices(&mut self) -> anyhow::Result<Vec<crate::Device>> {
+        Self::deserialize_response(
+            self.client
+                .call(self.create_request(http::Method::GET, "/devices", None)?)
+                .await?,
+        )
+        .await
+    }
+
+    pub async fn device(&mut self, id: &str) -> anyhow::Result<crate::Device> {
+        Self::deserialize_response(
+            self.client
+                .call(self.create_request(
+                    http::Method::GET,
+                    format!("/devices/{}", id).as_str(),
+                    None,
+                )?)
+                .await?,
+        )
+        .await
+    }
+
+    pub async fn rename(
+        &mut self,
+        device: &mut crate::device::Device,
+        new_name: &str,
+    ) -> anyhow::Result<()> {
+        let inner = device.inner_mut();
+
+        if !has_capability(
+            inner.capabilities.can_receive.as_ref(),
+            &[crate::device::Capability::CustomName],
+        ) {
+            anyhow::bail!("device cannot change name");
+        }
+
+        let mut attributes = HashMap::new();
+        attributes.insert("customName", new_name);
+
+        let mut body = HashMap::new();
+        body.insert("attributes", attributes);
+
+        let body: String = serde_json::to_string(&vec![body])?;
+
+        self.client
+            .call(self.create_request(
+                http::Method::PATCH,
+                format!("/devices/{}", inner.id).as_str(),
+                Some(hyper::Body::from(body)),
+            )?)
+            .await?;
+
+        inner.attributes.custom_name = new_name.to_string();
 
         Ok(())
     }
 
-    pub fn device_toggle_request(
-        &self,
-        device: &crate::device::Device,
-    ) -> anyhow::Result<DirigeraBody<bool>> {
-        if !device
-            .into_inner()
-            .capabilities
-            .can_receive
-            .contains(&crate::device::Capability::IsOn)
-        {
+    pub async fn toggle_on_off(
+        &mut self,
+        device: &mut crate::device::Device,
+    ) -> anyhow::Result<()> {
+        let inner = device.inner_mut();
+
+        if !has_capability(
+            inner.capabilities.can_receive.as_ref(),
+            &[crate::device::Capability::IsOn],
+        ) {
             anyhow::bail!("device cannot be toggled");
         }
-
-        let inner = device.into_inner();
 
         let mut attributes = HashMap::new();
         attributes.insert("isOn", !inner.attributes.is_on);
@@ -149,29 +172,133 @@ impl Hub {
         let mut body = HashMap::new();
         body.insert("attributes", attributes);
 
-        self.build_uri(
-            http::Method::PATCH,
-            format!("/devices/{}", inner.id).as_str(),
-            vec![body],
-        )
+        let body: String = serde_json::to_string(&vec![body])?;
+
+        self.client
+            .call(self.create_request(
+                http::Method::PATCH,
+                format!("/devices/{}", inner.id).as_str(),
+                Some(hyper::Body::from(body)),
+            )?)
+            .await?;
+
+        inner.attributes.is_on = !inner.attributes.is_on;
+
+        Ok(())
     }
 
-    pub fn device_set_hue_saturation(
-        &self,
-        device: &crate::device::Device,
-        hue: f64,
-        saturation: f64,
-    ) -> anyhow::Result<DirigeraBody<f64>> {
-        if !device
-            .into_inner()
-            .capabilities
-            .can_receive
-            .contains(&crate::device::Capability::ColorHue)
-        {
-            anyhow::bail!("device cannot be toggled");
+    pub async fn set_light_level(
+        &mut self,
+        device: &mut crate::device::Device,
+        level: u8,
+    ) -> anyhow::Result<()> {
+        let inner = device.inner_mut();
+
+        if !has_capability(
+            inner.capabilities.can_receive.as_ref(),
+            &[crate::device::Capability::LightLevel],
+        ) {
+            anyhow::bail!("device cannot set light level");
         }
 
-        let inner = device.into_inner();
+        if level > 100 {
+            anyhow::bail!("level must be between 0.0 -> 100.0");
+        }
+
+        let mut attributes = HashMap::new();
+        attributes.insert("lightLevel", level);
+
+        let mut body = HashMap::new();
+        body.insert("attributes", attributes);
+
+        let body: String = serde_json::to_string(&vec![body])?;
+
+        self.client
+            .call(self.create_request(
+                http::Method::PATCH,
+                format!("/devices/{}", inner.id).as_str(),
+                Some(hyper::Body::from(body)),
+            )?)
+            .await?;
+
+        inner.attributes.light_level = Some(level);
+
+        Ok(())
+    }
+
+    pub async fn set_temperature(
+        &mut self,
+        device: &mut crate::device::Device,
+        temperature: u16,
+    ) -> anyhow::Result<()> {
+        let inner = device.inner_mut();
+
+        if !has_capability(
+            inner.capabilities.can_receive.as_ref(),
+            &[crate::device::Capability::ColorTemperature],
+        ) {
+            anyhow::bail!("device cannot set color temperature");
+        }
+
+        let min = inner
+            .attributes
+            .color_temperature_min
+            .ok_or_else(|| anyhow::anyhow!("device has no min temperature value"))?;
+        let max = inner
+            .attributes
+            .color_temperature_max
+            .ok_or_else(|| anyhow::anyhow!("device has no max temperature value"))?;
+
+        if !(max..=min).contains(&temperature) {
+            anyhow::bail!("color temperature {temperature} not within {min} -> {max}");
+        }
+
+        let mut attributes = HashMap::new();
+        attributes.insert("colorTemperature", temperature);
+
+        let mut body = HashMap::new();
+        body.insert("attributes", attributes);
+
+        let body: String = serde_json::to_string(&vec![body])?;
+
+        self.client
+            .call(self.create_request(
+                http::Method::PATCH,
+                format!("/devices/{}", inner.id).as_str(),
+                Some(hyper::Body::from(body)),
+            )?)
+            .await?;
+
+        inner.attributes.color_temperature = Some(temperature);
+
+        Ok(())
+    }
+
+    pub async fn set_hue_saturation(
+        &mut self,
+        device: &mut crate::device::Device,
+        hue: f64,
+        saturation: f64,
+    ) -> anyhow::Result<()> {
+        let inner = device.inner_mut();
+
+        if !has_capability(
+            inner.capabilities.can_receive.as_ref(),
+            &[
+                crate::device::Capability::ColorHue,
+                crate::device::Capability::ColorSaturation,
+            ],
+        ) {
+            anyhow::bail!("device cannot be change for hue and saturation");
+        }
+
+        if !(0f64..=360f64).contains(&hue) {
+            anyhow::bail!("hue must be between 0.0 -> 360.0");
+        }
+
+        if !(0f64..=1f64).contains(&saturation) {
+            anyhow::bail!("hue must be between 0.0 -> 1.0");
+        }
 
         let mut attributes = HashMap::new();
         attributes.insert("colorHue", hue);
@@ -180,10 +307,143 @@ impl Hub {
         let mut body = HashMap::new();
         body.insert("attributes", attributes);
 
-        self.build_uri(
-            http::Method::PATCH,
-            format!("/devices/{}", inner.id).as_str(),
-            vec![body],
-        )
+        let body: String = serde_json::to_string(&vec![body])?;
+
+        self.client
+            .call(self.create_request(
+                http::Method::PATCH,
+                format!("/devices/{}", inner.id).as_str(),
+                Some(hyper::Body::from(body)),
+            )?)
+            .await?;
+
+        inner.attributes.color_hue = Some(hue);
+        inner.attributes.color_saturation = Some(hue);
+
+        Ok(())
     }
+
+    pub async fn set_startup_behaviour(
+        &mut self,
+        device: &mut crate::device::Device,
+        behaviour: crate::device::Startup,
+    ) -> anyhow::Result<()> {
+        let inner = device.inner_mut();
+
+        let mut attributes = HashMap::new();
+        attributes.insert("startupOnOff", &behaviour);
+
+        let mut body = HashMap::new();
+        body.insert("attributes", attributes);
+
+        let body: String = serde_json::to_string(&vec![body])?;
+
+        self.client
+            .call(self.create_request(
+                http::Method::PATCH,
+                format!("/devices/{}", inner.id).as_str(),
+                Some(hyper::Body::from(body)),
+            )?)
+            .await?;
+
+        inner.attributes.startup_on_off = Some(behaviour);
+
+        Ok(())
+    }
+
+    pub async fn set_target_level(
+        &mut self,
+        device: &mut crate::device::Device,
+        level: u8,
+    ) -> anyhow::Result<()> {
+        let inner = device.inner_mut();
+
+        if !has_capability(
+            inner.capabilities.can_receive.as_ref(),
+            &[crate::device::Capability::BlindsState],
+        ) {
+            anyhow::bail!("device cannot be change for blind state");
+        }
+
+        if level > 100 {
+            anyhow::bail!("level must be between 0.0 -> 100.0");
+        }
+
+        let mut attributes = HashMap::new();
+        attributes.insert("blindsTargetLevel", level);
+
+        let mut body = HashMap::new();
+        body.insert("attributes", attributes);
+
+        let body: String = serde_json::to_string(&vec![body])?;
+
+        self.client
+            .call(self.create_request(
+                http::Method::PATCH,
+                format!("/devices/{}", inner.id).as_str(),
+                Some(hyper::Body::from(body)),
+            )?)
+            .await?;
+
+        inner.attributes.blinds_target_level = Some(level);
+
+        Ok(())
+    }
+
+    pub async fn scenes(&mut self) -> anyhow::Result<Vec<crate::Scene>> {
+        Self::deserialize_response(
+            self.client
+                .call(self.create_request(http::Method::GET, "/scenes", None)?)
+                .await?,
+        )
+        .await
+    }
+
+    pub async fn scene(&mut self, id: &str) -> anyhow::Result<crate::Scene> {
+        Self::deserialize_response(
+            self.client
+                .call(self.create_request(
+                    http::Method::GET,
+                    format!("/scenes/{}", id).as_str(),
+                    None,
+                )?)
+                .await?,
+        )
+        .await
+    }
+
+    pub async fn trigger_scene(&mut self, scene: &crate::scene::Scene) -> anyhow::Result<()> {
+        let inner = scene.inner();
+
+        self.client
+            .call(self.create_request(
+                http::Method::POST,
+                format!("/scenes/{}/trigger", inner.id).as_str(),
+                Some(hyper::Body::empty()),
+            )?)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn undo_scene(&mut self, scene: &crate::scene::Scene) -> anyhow::Result<()> {
+        let inner = scene.inner();
+
+        self.client
+            .call(self.create_request(
+                http::Method::POST,
+                format!("/scenes/{}/undo", inner.id).as_str(),
+                Some(hyper::Body::empty()),
+            )?)
+            .await?;
+
+        Ok(())
+    }
+}
+
+fn has_capability(
+    got: &[crate::device::Capability],
+    required: &[crate::device::Capability],
+) -> bool {
+    required.iter().all(|item| got.contains(item))
 }

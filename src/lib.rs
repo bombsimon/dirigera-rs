@@ -31,3 +31,33 @@ where
         Err(_) => Ok(None),
     }
 }
+
+pub mod danger {
+    pub struct NoCertificateVerification;
+
+    impl rustls::client::ServerCertVerifier for NoCertificateVerification {
+        fn verify_server_cert(
+            &self,
+            _end_entity: &rustls::Certificate,
+            _intermediates: &[rustls::Certificate],
+            _server_name: &rustls::client::ServerName,
+            _scts: &mut dyn Iterator<Item = &[u8]>,
+            _ocsp_response: &[u8],
+            _now: std::time::SystemTime,
+        ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
+            Ok(rustls::client::ServerCertVerified::assertion())
+        }
+    }
+
+    pub fn tls_no_verify() -> rustls::ClientConfig {
+        let mut tls = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(rustls::RootCertStore::empty())
+            .with_no_client_auth();
+
+        tls.dangerous()
+            .set_certificate_verifier(std::sync::Arc::new(NoCertificateVerification));
+
+        tls
+    }
+}
