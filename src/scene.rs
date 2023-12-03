@@ -134,7 +134,7 @@ pub enum Action {
     Device(ActionData),
 }
 
-/// Data for the action type which holds the [`Device`] id and attribute for the [`Scene`].
+/// Data for the action type which holds the [`Device`](crate::Device) id and attribute for the [`Scene`].
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActionData {
@@ -144,7 +144,7 @@ pub struct ActionData {
 }
 
 /// Attributes to the scene which shows information about on or off state and light level and color
-/// temperature for [`Device`]s that support those.
+/// temperature for [`Device`](crate::Device)s that support those.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SceneAttributes {
