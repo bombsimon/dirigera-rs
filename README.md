@@ -3,6 +3,13 @@
 **This crate is under development and can change at any time! Do not use just
 yet!**
 
+> [!NOTE]\
+> I only have a few IKEA devices so most of the endpoints I've been trying has
+> been for lights. I also don't use scenes extensively but tried to set up and
+> configure all available ones to research the API.
+> If you have any other devices and want to contribute to the code that would be
+> much appreciated!
+
 ## Setup
 
 To communicate with the Dirigera device you need to know its IP address and
@@ -52,3 +59,8 @@ Just use the token you got and your favourite HTTP client.
   "https://[ip]:8443/v1/devices" \
   "Authorization: Bearer $TOKEN"
 ```
+
+## Acknowledgement
+
+- [Leggin/dirigera](https://github.com/Leggin/dirigera) for the inspiration and
+  most of the information of the API, including token generation.
