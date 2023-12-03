@@ -31,17 +31,15 @@ async fn main() -> anyhow::Result<()> {
     let code_challenge = pkce::code_challenge(&code_verify);
     let code_veirifier_string = String::from_utf8(code_verify)?;
 
-    let mut authorize_params = HashMap::new();
-    authorize_params.insert("audience", "homesmart.local");
-    authorize_params.insert("response_type", "code");
-    authorize_params.insert("code_challenge", code_challenge.as_str());
-    authorize_params.insert("code_challenge_method", "S256");
-
-    let mut auth_url =
-        url::Url::parse(format!("https://{}:8443/v1/oauth/authorize", ip_address).as_str())?;
-    for (key, value) in authorize_params.iter() {
-        auth_url.query_pairs_mut().append_pair(key, value);
-    }
+    let auth_url = reqwest::Url::parse_with_params(
+        format!("https://{}:8443/v1/oauth/authorize", ip_address).as_str(),
+        &[
+            ("audience", "homesmart.local"),
+            ("response_type", "code"),
+            ("code_challenge", code_challenge.as_str()),
+            ("code_challenge_method", "S256"),
+        ],
+    )?;
 
     let response: HashMap<String, String> = client.get(auth_url).send().await?.json().await?;
     let code = response
@@ -60,7 +58,7 @@ async fn main() -> anyhow::Result<()> {
     token_params.insert("code_verifier", code_veirifier_string.as_str());
 
     let token_url =
-        url::Url::parse(format!("https://{}:8443/v1/oauth/token", ip_address).as_str())?;
+        reqwest::Url::parse(format!("https://{}:8443/v1/oauth/token", ip_address).as_str())?;
 
     let response: HashMap<String, String> = client
         .post(token_url)
