@@ -1,3 +1,7 @@
+//! Dirigera: Manger your IKEA devices.
+//! Dirigera is a client to communicate with your IKEA Dirigera hub and control your Trådfri
+//! devices. It is built with [`hyper`] and is bundled with an optional tool to generate the token
+//! you need for the communication.
 pub mod device;
 pub mod hub;
 pub mod scene;
@@ -32,6 +36,8 @@ where
     }
 }
 
+/// A module that is used to disable TLS verification. This is used because the Dirigera HUB uses
+/// HTTPS but with a self signed certificate.
 pub mod danger {
     pub struct NoCertificateVerification;
 

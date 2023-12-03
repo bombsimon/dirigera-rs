@@ -1,3 +1,9 @@
+//! The IKEA hub is what you're communicating with and what's running the API to manage your
+//! devices. Because of that the [`Hub`] is what's exposing all methods from the API. The API is a
+//! RESTful HTTPS API with a self signed certificate so you need a [`hyper`] client that doesn't do
+//! TLS verification. You also need a bearer token which is obtain via OAuth 2. Configuration for
+//! TLS and tool to get a token is both available under the [`danger`] module and the `config`
+//! feature flag respectively.
 use hyper::service::Service;
 use serde::Deserialize;
 
@@ -5,6 +11,11 @@ use std::collections::HashMap;
 #[cfg(feature = "config")]
 use std::io::Read;
 
+const DIRIGERA_PORT: u16 = 8443;
+const DIRIGERA_API_VERSION: &str = "v1";
+
+/// A [`Hyb`] consists of a [`hyper`] client, the hub's IP address and a token to communicate with
+/// it.
 #[derive(Debug)]
 pub struct Hub {
     client: hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
@@ -12,6 +23,9 @@ pub struct Hub {
     token: String,
 }
 
+/// If you want to read the configuration from a `toml` file, the [`Config`] is used to deserialize
+/// the file contents. It's only available behind the `config` feature flag.
+#[cfg(feature = "config")]
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
@@ -19,9 +33,9 @@ pub struct Config {
     token: String,
 }
 
-const DIRIGERA_PORT: u16 = 8443;
-const DIRIGERA_API_VERSION: &str = "v1";
-
+/// The default implementation for [`Hub`] can be used to read the IP address and token from a
+/// `toml` file. Such `toml` file will be created by running the `generate-token` binary. It will
+/// also use the [`danger`] module to setup [`rustls`] with no certification verification.
 #[cfg(feature = "config")]
 impl Default for Hub {
     fn default() -> Self {
@@ -47,6 +61,8 @@ impl Default for Hub {
 }
 
 impl Hub {
+    /// Create a new instance of the [`Hub`]. You need to construct your own [`hyper]` client and
+    /// use it together with the IP address and bearer token for the [`Hub`].
     pub fn new(
         client: hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
         ip_address: std::net::Ipv4Addr,
@@ -96,6 +112,8 @@ impl Hub {
         serde_json::from_slice(body.as_ref()).map_err(|err| anyhow::anyhow!(err))
     }
 
+    /// List all devices that is known for the [`Hub`]. This will return an exhaustive list of
+    /// [`Device`]s.
     pub async fn devices(&mut self) -> anyhow::Result<Vec<crate::Device>> {
         Self::deserialize_response(
             self.client
@@ -105,6 +123,7 @@ impl Hub {
         .await
     }
 
+    /// Get a single [`Device`] based on its id.
     pub async fn device(&mut self, id: &str) -> anyhow::Result<crate::Device> {
         Self::deserialize_response(
             self.client
@@ -118,6 +137,8 @@ impl Hub {
         .await
     }
 
+    /// Rename a [`Device`]. The function takes a mutable reference to the [`Device`] because on
+    /// successful renaming the passed [`Device`] will be updated with the new name.
     pub async fn rename(
         &mut self,
         device: &mut crate::device::Device,
@@ -153,6 +174,9 @@ impl Hub {
         Ok(())
     }
 
+    /// Toggle a [`Device`] on and off. Requires the [`Device`] to support [`Capability::IsOn`] as
+    /// a receivable capability. The function takes a mutable reference to the [`Device`] because
+    /// on successful toggle the passed [`Device`] will be updated with the new state.
     pub async fn toggle_on_off(
         &mut self,
         device: &mut crate::device::Device,
@@ -187,6 +211,10 @@ impl Hub {
         Ok(())
     }
 
+    /// Set light level on the [`Device`]. Requires the [`Device`] to support
+    /// [`Capability::LightLevel`] as a receivable capability. The function takes a mutable
+    /// reference to the [`Device`] because on successful change the passed [`Device`] will be
+    /// updated with the new light level.
     pub async fn set_light_level(
         &mut self,
         device: &mut crate::device::Device,
@@ -226,6 +254,10 @@ impl Hub {
         Ok(())
     }
 
+    /// Set color temperature on the [`Device`]. Requires the [`Device`] to support
+    /// [`Capability::ColorTemperature`] as a receivable capability. The function takes a mutable
+    /// reference to the [`Device`] because on successful change the passed [`Device`] will be
+    /// updated with the new color temperature.
     pub async fn set_temperature(
         &mut self,
         device: &mut crate::device::Device,
@@ -274,6 +306,10 @@ impl Hub {
         Ok(())
     }
 
+    /// Set hue and saturation on the [`Device`]. Requires the [`Device`] to support
+    /// [`Capability::ColorHue`] and [`Capability::ColorSaturation`] as a receivable capability.
+    /// The function takes a mutable reference to the [`Device`] because on successful change the
+    /// passed [`Device`] will be updated with the new hue and saturation.
     pub async fn set_hue_saturation(
         &mut self,
         device: &mut crate::device::Device,
@@ -323,6 +359,9 @@ impl Hub {
         Ok(())
     }
 
+    /// Set startup behaviour on the [`Device`]. The function takes a mutable reference to the
+    /// [`Device`] because on successful change the passed [`Device`] will be updated with the new
+    /// startup behaviour.
     pub async fn set_startup_behaviour(
         &mut self,
         device: &mut crate::device::Device,
@@ -351,6 +390,10 @@ impl Hub {
         Ok(())
     }
 
+    /// Set target level on the [`Device`]. Requires the [`Device`] to support
+    /// [`Capability::BlindState`] as a receivable capability. The function takes a mutable
+    /// reference to the [`Device`] because on successful change the passed [`Device`] will be
+    /// updated with the new target level for the blinds.
     pub async fn set_target_level(
         &mut self,
         device: &mut crate::device::Device,
@@ -390,6 +433,8 @@ impl Hub {
         Ok(())
     }
 
+    /// List all scenes that is known for the [`Hub`]. This will return an exhaustive list of
+    /// [`Scene`]s.
     pub async fn scenes(&mut self) -> anyhow::Result<Vec<crate::Scene>> {
         Self::deserialize_response(
             self.client
@@ -399,6 +444,7 @@ impl Hub {
         .await
     }
 
+    /// Get a single [`Scene`] based on its id.
     pub async fn scene(&mut self, id: &str) -> anyhow::Result<crate::Scene> {
         Self::deserialize_response(
             self.client
@@ -412,6 +458,7 @@ impl Hub {
         .await
     }
 
+    /// Trigger a [`Scene`] now. Will work independent of a scheduled scene or not.
     pub async fn trigger_scene(&mut self, scene: &crate::scene::Scene) -> anyhow::Result<()> {
         let inner = scene.inner();
 
@@ -426,6 +473,7 @@ impl Hub {
         Ok(())
     }
 
+    /// Undo scene will revert the changes set by the [`Scene`].
     pub async fn undo_scene(&mut self, scene: &crate::scene::Scene) -> anyhow::Result<()> {
         let inner = scene.inner();
 

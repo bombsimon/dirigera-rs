@@ -1,12 +1,17 @@
+//! With the IKEA Home Smart app you can configure scenes that can be either triggered manually or
+//! on a schedule. Scenes are specific configuration for a set of devices such as color
+//! temperature, light level, blind level etcetera.
 use crate::{deserialize_datetime, deserialize_datetime_optional};
 use serde::Deserialize;
 
+/// A [`Scene`] is represented by its `type` and will hold all the [`SceneData`].
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum Scene {
     UserScene(SceneData),
 }
 
+/// Specific data for a scene such as what actions it will do and what [`Trigger`]s it has.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SceneData {
@@ -28,6 +33,7 @@ pub struct SceneData {
     pub last_undo: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+/// Each scene has a name and icon which is represented under the scene [`Info`].
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Info {
@@ -35,6 +41,8 @@ pub struct Info {
     pub icon: String,
 }
 
+/// A scene can be triggered from the app (or API), based on sunrise or sunset or on a specific
+/// time.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum Trigger {
@@ -43,6 +51,7 @@ pub enum Trigger {
     Time(TimeTrigger),
 }
 
+/// Events triggered from the app shows the state and when it was triggered.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppTrigger {
@@ -52,6 +61,8 @@ pub struct AppTrigger {
     pub triggered_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+/// Events triggered on time will show when the next trigger will happen and what [`EndTrigger`] the
+/// schedule has.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TimeTrigger {
@@ -63,6 +74,8 @@ pub struct TimeTrigger {
     pub end_trigger_event: EndTrigger,
 }
 
+/// Sunrise and sunset events will sync with the user's location and the response will show when
+/// the next trigger will happen and what [`EndTrigger`] the schedule has.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SunriseSunsetTrigger {
@@ -74,6 +87,8 @@ pub struct SunriseSunsetTrigger {
     pub end_trigger_event: EndTrigger,
 }
 
+/// An [`EndTrigger`] is something that will trigger the scene to end. It can be based on a
+/// duration, sunrise or sunset or a specific time.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "type", content = "trigger")]
 pub enum EndTrigger {
@@ -82,12 +97,15 @@ pub enum EndTrigger {
     Time(Time),
 }
 
+/// Duration is just number of seconds from the trigger start.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Duration {
     pub duration: u32,
 }
 
+/// Sunrise and sunset shows what days to trigger for sunrise or sunset if specific days and any
+/// offset from the sunrise or sunset time.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum Follow {
@@ -101,6 +119,7 @@ pub enum Follow {
     },
 }
 
+/// Time shows what days to trigger for the specific time and what time that is.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Time {
@@ -108,12 +127,14 @@ pub struct Time {
     pub time: String,
 }
 
+/// A scene has a type to target for its action.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum Action {
     Device(ActionData),
 }
 
+/// Data for the action type which holds the [`Device`] id and attribute for the [`Scene`].
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActionData {
@@ -122,6 +143,8 @@ pub struct ActionData {
     pub attributes: SceneAttributes,
 }
 
+/// Attributes to the scene which shows information about on or off state and light level and color
+/// temperature for [`Device`]s that support those.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SceneAttributes {
@@ -131,6 +154,7 @@ pub struct SceneAttributes {
 }
 
 impl Scene {
+    /// Get a reference to the [`SceneData`] for the [`Scene`].
     pub fn inner(&self) -> &SceneData {
         match self {
             Scene::UserScene(inner) => inner,
