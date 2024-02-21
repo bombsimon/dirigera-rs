@@ -195,7 +195,12 @@ impl Hub {
         }
 
         let mut attributes = HashMap::new();
-        attributes.insert("isOn", !inner.attributes.is_on);
+
+        match inner.attributes.is_on {
+            None => attributes.insert("isOn", false),
+            Some(x) => attributes.insert("isOn", !x),
+        };
+        //attributes.insert("isOn", !inner.attributes.is_on);
 
         let mut body = HashMap::new();
         body.insert("attributes", attributes);
@@ -210,7 +215,11 @@ impl Hub {
             )?)
             .await?;
 
-        inner.attributes.is_on = !inner.attributes.is_on;
+        inner.attributes.is_on = match inner.attributes.is_on {
+            None => Some(!false),
+            Some(x) => Some(!x),
+        };
+        //inner.attributes.is_on = !inner.attributes.is_on;
 
         Ok(())
     }
@@ -223,7 +232,7 @@ impl Hub {
     pub async fn set_light_level(
         &mut self,
         device: &mut crate::device::Device,
-        level: u8,
+        level: i8,
     ) -> anyhow::Result<()> {
         let inner = device.inner_mut();
 

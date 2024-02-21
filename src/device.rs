@@ -15,6 +15,7 @@ pub enum Device {
     Light(DeviceData),
     Outlet(DeviceData),
     Sensor(DeviceData),
+    Blinds(DeviceData),
 }
 
 /// Common data that is shared between all [`Device`]s.
@@ -63,6 +64,8 @@ pub enum Capability {
     Time,
     Timezone,
     UserConsents,
+    BlindsCurrentLevel,
+    BlindsTargetLevel,
 }
 
 /// A [`Device`] has both a `type` which is interpreted as the [`Device`] enum but also a
@@ -75,6 +78,8 @@ pub enum DeviceType {
     Gateway,
     MotionSensor,
     Outlet,
+    Blinds,
+    BlindsController,
 }
 
 impl std::fmt::Display for DeviceType {
@@ -85,6 +90,8 @@ impl std::fmt::Display for DeviceType {
             Self::Gateway => f.pad("Gateway"),
             Self::MotionSensor => f.pad("MotionSensor"),
             Self::Outlet => f.pad("Outlet"),
+            Self::Blinds => f.pad("BlindsController"),
+            Self::BlindsController => f.pad("BlindsController"),
         }
     }
 }
@@ -138,13 +145,13 @@ pub struct Attributes {
     pub serial_number: String,
 
     // Light, controller and outlet
-    pub is_on: bool,
+    pub is_on: Option<bool>,
 
     // Light and outlet
     pub startup_on_off: Option<Startup>,
 
     // Light
-    pub light_level: Option<u8>,
+    pub light_level: Option<i8>,
     pub permitting_join: bool,
     pub color_mode: Option<String>,
     pub color_temperature: Option<u16>,
@@ -156,7 +163,7 @@ pub struct Attributes {
     pub circadian_rhythm_mode: Option<String>,
 
     // Controller
-    pub battery_percentage: Option<u8>,
+    pub battery_percentage: Option<i8>,
 
     // Blinds and controller
     pub blinds_current_level: Option<u8>,
@@ -185,6 +192,7 @@ impl Device {
             Device::Light(inner) => inner,
             Device::Outlet(inner) => inner,
             Device::Sensor(inner) => inner,
+            Device::Blinds(inner) => inner,
         }
     }
 
@@ -197,6 +205,7 @@ impl Device {
             Device::Light(ref mut inner) => inner,
             Device::Outlet(ref mut inner) => inner,
             Device::Sensor(ref mut inner) => inner,
+            Device::Blinds(ref mut inner) => inner,
         }
     }
 }
