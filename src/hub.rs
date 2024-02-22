@@ -224,7 +224,7 @@ impl Hub {
     pub async fn set_light_level(
         &mut self,
         device: &mut crate::device::Device,
-        level: i8,
+        level: u8,
     ) -> anyhow::Result<()> {
         let inner = device.inner_mut();
 

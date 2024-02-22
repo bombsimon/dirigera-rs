@@ -151,7 +151,7 @@ pub struct Attributes {
     pub startup_on_off: Option<Startup>,
 
     // Light
-    pub light_level: Option<i8>,
+    pub light_level: Option<u8>,
     pub permitting_join: bool,
     pub color_mode: Option<String>,
     pub color_temperature: Option<u16>,
