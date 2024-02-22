@@ -211,10 +211,7 @@ impl Hub {
             )?)
             .await?;
 
-        inner.attributes.is_on = match inner.attributes.is_on {
-            None => Some(!false),
-            Some(x) => Some(!x),
-        };
+        inner.attributes.is_on = inner.attributes.is_on.map(|x| !x);
         //inner.attributes.is_on = !inner.attributes.is_on;
 
         Ok(())
