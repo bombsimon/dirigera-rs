@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum Device {
-    Blind(DeviceData),
+    Blinds(DeviceData),
     Controller(DeviceData),
     Gateway(DeviceData),
     Light(DeviceData),
@@ -49,7 +49,9 @@ pub struct Capabilities {
 #[derive(Debug, Deserialize, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub enum Capability {
+    BlindsCurrentLevel,
     BlindsState,
+    BlindsTargetLevel,
     ColorHue,
     ColorSaturation,
     ColorTemperature,
@@ -75,6 +77,8 @@ pub enum DeviceType {
     Gateway,
     MotionSensor,
     Outlet,
+    Blinds,
+    BlindsController,
 }
 
 impl std::fmt::Display for DeviceType {
@@ -85,6 +89,8 @@ impl std::fmt::Display for DeviceType {
             Self::Gateway => f.pad("Gateway"),
             Self::MotionSensor => f.pad("MotionSensor"),
             Self::Outlet => f.pad("Outlet"),
+            Self::Blinds => f.pad("BlindsController"),
+            Self::BlindsController => f.pad("BlindsController"),
         }
     }
 }
@@ -138,7 +144,7 @@ pub struct Attributes {
     pub serial_number: String,
 
     // Light, controller and outlet
-    pub is_on: bool,
+    pub is_on: Option<bool>,
 
     // Light and outlet
     pub startup_on_off: Option<Startup>,
@@ -156,7 +162,7 @@ pub struct Attributes {
     pub circadian_rhythm_mode: Option<String>,
 
     // Controller
-    pub battery_percentage: Option<u8>,
+    pub battery_percentage: Option<i8>,
 
     // Blinds and controller
     pub blinds_current_level: Option<u8>,
@@ -179,7 +185,7 @@ impl Device {
     /// Get a reference to the [`DeviceData`] for the [`Device`].
     pub fn inner(&self) -> &DeviceData {
         match self {
-            Device::Blind(inner) => inner,
+            Device::Blinds(inner) => inner,
             Device::Controller(inner) => inner,
             Device::Gateway(inner) => inner,
             Device::Light(inner) => inner,
@@ -191,7 +197,7 @@ impl Device {
     /// Get a mutable reference to the [`DeviceData`] for the [`Device`].
     pub fn inner_mut(&mut self) -> &mut DeviceData {
         match self {
-            Device::Blind(ref mut inner) => inner,
+            Device::Blinds(ref mut inner) => inner,
             Device::Controller(ref mut inner) => inner,
             Device::Gateway(ref mut inner) => inner,
             Device::Light(ref mut inner) => inner,
