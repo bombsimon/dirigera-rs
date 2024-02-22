@@ -9,13 +9,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum Device {
-    Blind(DeviceData),
+    Blinds(DeviceData),
     Controller(DeviceData),
     Gateway(DeviceData),
     Light(DeviceData),
     Outlet(DeviceData),
     Sensor(DeviceData),
-    Blinds(DeviceData),
 }
 
 /// Common data that is shared between all [`Device`]s.
@@ -50,7 +49,9 @@ pub struct Capabilities {
 #[derive(Debug, Deserialize, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub enum Capability {
+    BlindsCurrentLevel,
     BlindsState,
+    BlindsTargetLevel,
     ColorHue,
     ColorSaturation,
     ColorTemperature,
@@ -64,8 +65,6 @@ pub enum Capability {
     Time,
     Timezone,
     UserConsents,
-    BlindsCurrentLevel,
-    BlindsTargetLevel,
 }
 
 /// A [`Device`] has both a `type` which is interpreted as the [`Device`] enum but also a
@@ -186,26 +185,24 @@ impl Device {
     /// Get a reference to the [`DeviceData`] for the [`Device`].
     pub fn inner(&self) -> &DeviceData {
         match self {
-            Device::Blind(inner) => inner,
+            Device::Blinds(inner) => inner,
             Device::Controller(inner) => inner,
             Device::Gateway(inner) => inner,
             Device::Light(inner) => inner,
             Device::Outlet(inner) => inner,
             Device::Sensor(inner) => inner,
-            Device::Blinds(inner) => inner,
         }
     }
 
     /// Get a mutable reference to the [`DeviceData`] for the [`Device`].
     pub fn inner_mut(&mut self) -> &mut DeviceData {
         match self {
-            Device::Blind(ref mut inner) => inner,
+            Device::Blinds(ref mut inner) => inner,
             Device::Controller(ref mut inner) => inner,
             Device::Gateway(ref mut inner) => inner,
             Device::Light(ref mut inner) => inner,
             Device::Outlet(ref mut inner) => inner,
             Device::Sensor(ref mut inner) => inner,
-            Device::Blinds(ref mut inner) => inner,
         }
     }
 }
