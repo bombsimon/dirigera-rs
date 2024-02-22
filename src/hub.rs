@@ -196,10 +196,7 @@ impl Hub {
 
         let mut attributes = HashMap::new();
 
-        match inner.attributes.is_on {
-            None => attributes.insert("isOn", false),
-            Some(x) => attributes.insert("isOn", !x),
-        };
+        inner.attributes.is_on.map(|x| attributes.insert("isOn", !x));
         //attributes.insert("isOn", !inner.attributes.is_on);
 
         let mut body = HashMap::new();
