@@ -212,7 +212,6 @@ impl Hub {
             .await?;
 
         inner.attributes.is_on = inner.attributes.is_on.map(|x| !x);
-        //inner.attributes.is_on = !inner.attributes.is_on;
 
         Ok(())
     }
